@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 from utils import diff2clf, clf2diff, normalize
 import random
+from wavelet_utils import multi_level_dwt, multi_level_idwt
 
 def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
     betas = np.linspace(
@@ -14,7 +15,7 @@ def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
 
 
 class PurificationForward(torch.nn.Module):
-    def __init__(self, clf, diffusion, max_timestep, attack_steps, sampling_method, is_imagenet, device,amplitude_cut_range,phase_cut_range,delta,forward_noise_steps):
+    def __init__(self, clf, diffusion, max_timestep, attack_steps, sampling_method, is_imagenet, device,amplitude_cut_range,phase_cut_range,delta,forward_noise_steps, transform_type='dct', wavelet_levels=2):
         super().__init__()
         self.clf = clf
         self.diffusion = diffusion
@@ -33,6 +34,8 @@ class PurificationForward(torch.nn.Module):
             self.eta = 1
         self.is_imagenet = is_imagenet
         self.forward_noise_steps = forward_noise_steps
+        self.transform_type = transform_type
+        self.wavelet_levels = wavelet_levels
 
     def compute_alpha(self, t):
         beta = torch.cat(
@@ -183,7 +186,38 @@ class PurificationForward(torch.nn.Module):
             reconstructed_image.append(img_reconstructed/255)
         return torch.stack(reconstructed_image,dim=2)
 
+    def wavelet_exchange(self, x_ref, x_est):
+        """
+        Wavelet-based frequency exchange.
+        x_ref: Reference image (adversarial), shape (B, C, H, W), range [0, 1]
+        x_est: Estimated image (from diffusion), shape (B, C, H, W), range [0, 1]
+        """
+        # Forward DWT on both images
+        LL_ref, coeffs_ref, pads = multi_level_dwt(x_ref, levels=self.wavelet_levels)
+        LL_est, coeffs_est, _ = multi_level_dwt(x_est, levels=self.wavelet_levels)
         
+        # LL Exchange: Replace estimate's LL with reference's LL (structure preservation)
+        # This is analogous to ASE - keeping the adversarial's low-frequency structure
+        LL_new = LL_ref
+        
+        # Detail Projection: Clip estimate's details to be within delta of reference
+        # This is analogous to PSP - soft constraint on high-frequency details
+        coeffs_new = []
+        for i in range(len(coeffs_ref)):
+            LH_r, HL_r, HH_r = coeffs_ref[i]
+            LH_e, HL_e, HH_e = coeffs_est[i]
+            
+            # Project estimate details to be within delta of reference
+            LH_n = torch.clamp(LH_e, LH_r - self.delta, LH_r + self.delta)
+            HL_n = torch.clamp(HL_e, HL_r - self.delta, HL_r + self.delta)
+            HH_n = torch.clamp(HH_e, HH_r - self.delta, HH_r + self.delta)
+            
+            coeffs_new.append((LH_n, HL_n, HH_n))
+        
+        # Inverse DWT to reconstruct
+        x_new = multi_level_idwt(LL_new, coeffs_new, pads)
+        return torch.clamp(x_new, 0, 1)
+
     
     def amplitude_phase_exchange_torch(self,x,x_0_t):
         x_t = self.get_noised_x(x, self.forward_noise_steps)
@@ -192,6 +226,15 @@ class PurificationForward(torch.nn.Module):
         et = self.diffusion(x_t, t)
         x =  (x_t - et * (1 - at).sqrt()) / at.sqrt()
         # save_image(diff2clf(x), 'new_x_0_t.png')
+        
+        # Wavelet-based exchange
+        if self.transform_type == 'wavelet':
+            x_ref = torch.clamp(diff2clf(x), 0, 1)
+            x_est = torch.clamp(diff2clf(x_0_t), 0, 1)
+            new_x_0_t_clf = self.wavelet_exchange(x_ref, x_est)
+            return clf2diff(new_x_0_t_clf)
+        
+        # DCT-based exchange (original)
         x = torch.clip((diff2clf(x)* 255),0,255)
         x_0_t = torch.clip((diff2clf(x_0_t)* 255),0,255)
 

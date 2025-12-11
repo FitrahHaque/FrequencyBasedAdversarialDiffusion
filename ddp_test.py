@@ -120,9 +120,11 @@ def test(rank, world_size, args):
 
         # Set diffusion process for attack and defense
         attack_forward = PurificationForward(clf=clf, diffusion=diffusion, is_imagenet=is_imagenet,max_timestep=att_max_timesteps,attack_steps=att_diffusion_steps,forward_noise_steps = args.forward_noise_steps,
-                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.att_sampling_method)
+                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.att_sampling_method,
+                                            transform_type=args.transform_type, wavelet_levels=args.wavelet_levels)
         defense_forward = PurificationForward(clf=clf, diffusion=diffusion, is_imagenet=is_imagenet,max_timestep=def_max_timesteps,attack_steps=def_diffusion_steps,forward_noise_steps = args.forward_noise_steps,
-                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.def_sampling_method)
+                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.def_sampling_method,
+                                            transform_type=args.transform_type, wavelet_levels=args.wavelet_levels)
 
         # Set adversarial attack
         if args.dataset == 'cifar10':
@@ -242,6 +244,10 @@ def parse_args():
     parser.add_argument('--phase_cut_range', type=int, default=10)
     parser.add_argument('--delta', type=float, default=0.3)
     parser.add_argument('--forward_noise_steps',type=float,default=50)
+    parser.add_argument('--transform_type', type=str, default='dct', choices=['dct', 'wavelet'],
+                        help='Transform for frequency purification: dct (original) or wavelet')
+    parser.add_argument('--wavelet_levels', type=int, default=2,
+                        help='Number of wavelet decomposition levels (only used if transform_type=wavelet)')
     # Purification hyperparameters in defense
     parser.add_argument("--def_max_timesteps", type=str, default='1000',
                         help='The number of forward steps for each purification step in defense')
