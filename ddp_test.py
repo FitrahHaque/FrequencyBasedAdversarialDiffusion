@@ -84,8 +84,8 @@ def test(rank, world_size, args):
     device = torch.device('cuda:{}'.format(rank))
 
     # Load dataset
-    assert 512 % args.batch_size == 0
-    testset = load_dataset_by_name(args.dataset, dataset_root, 512)
+    assert args.num_samples % args.batch_size == 0, f'num_samples ({args.num_samples}) must be divisible by batch_size ({args.batch_size})'
+    testset = load_dataset_by_name(args.dataset, dataset_root, args.num_samples)
     testsampler = torch.utils.data.distributed.DistributedSampler(testset,
                                                                 num_replicas=world_size,
                                                                 rank=rank)
@@ -235,6 +235,8 @@ def parse_args():
     parser.add_argument('--exp', type=str, default='test', help='Experiment name')
     parser.add_argument("--dataset", type=str, default='cifar10',
                         choices=['cifar10', 'imagenet', 'svhn'])
+    parser.add_argument('--num_samples', type=int, default=512,
+                        help='Number of test samples to use')
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--amplitude_cut_range', type=int, default=10)
     parser.add_argument('--phase_cut_range', type=int, default=10)

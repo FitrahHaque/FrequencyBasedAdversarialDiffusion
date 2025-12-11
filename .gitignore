@@ -1,0 +1,78 @@
+# ===========================
+# Generated Output Files
+# ===========================
+# These are generated during inference/evaluation
+original/
+adv/
+pure_images/
+output_logs.txt
+
+# ===========================
+# Downloaded Data & Models
+# ===========================
+# These need to be downloaded by each user (see SETUP.md)
+dataset/
+pretrained/
+models/
+
+# ===========================
+# Python Cache
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ===========================
+# PyTorch / CUDA Extensions
+# ===========================
+# JIT compiled CUDA extensions (machine-specific)
+*.o
+*.obj
+
+# ===========================
+# Jupyter Notebooks
+# ===========================
+.ipynb_checkpoints/
+*.ipynb
+
+# ===========================
+# IDE / Editor
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ===========================
+# Virtual Environments
+# ===========================
+venv/
+env/
+.env/
+
+# ===========================
+# Logs & Temp Files
+# ===========================
+*.log
+logs/
+tmp/
+temp/

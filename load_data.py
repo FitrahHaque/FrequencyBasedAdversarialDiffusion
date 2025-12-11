@@ -107,7 +107,7 @@ def imagenet_lmdb_dataset(
 
 def cifar10_dataset_sub(root, transform=None, num_sub=512, data_seed=0):
     dataset = torchvision.datasets.CIFAR10(
-        root=root, transform=transform, download=False, train=False)
+        root=root, transform=transform, download=True, train=False)
     if num_sub > 0:
         partition_idx = np.random.RandomState(data_seed).choice(
             len(dataset), num_sub, replace=False)
