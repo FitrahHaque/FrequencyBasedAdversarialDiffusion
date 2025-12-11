@@ -64,7 +64,7 @@ mkdir -p ./dataset
 
 ### Basic Command
 
-For a quick test with 50 samples on 2 GPUs:
+For a quick test with 64 samples on 2 GPUs:
 
 ```bash
 PATH=/usr/local/cuda-12.6/bin:$PATH \
@@ -79,8 +79,8 @@ torchrun --nproc_per_node=2 ddp_test.py \
     --att_max_timesteps 1000 \
     --att_num_denoising_steps 1 \
     --num_ensemble_runs 10 \
-    --num_samples 50 \
-    --batch_size 25
+    --num_samples 64 \
+    --batch_size 32
 ```
 
 ### Full Evaluation (512 samples)
@@ -165,4 +165,4 @@ python -c "import torchvision; torchvision.datasets.CIFAR10('./dataset/cifar10',
 
 ## Reference
 
-Original paper and code: [DiffPure](https://github.com/NVlabs/DiffPure)
+Original paper and code: [FreqPure](https://github.com/GaozhengPei/FreqPure)
