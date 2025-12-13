@@ -1,0 +1,22 @@
+W1212 20:55:24.919000 432282 torch/distributed/run.py:803] 
+W1212 20:55:24.919000 432282 torch/distributed/run.py:803] *****************************************
+W1212 20:55:24.919000 432282 torch/distributed/run.py:803] Setting OMP_NUM_THREADS environment variable for each process to be 1 in default, to avoid your system being overloaded, please further tune the variable for optimal performance in your application as needed. 
+W1212 20:55:24.919000 432282 torch/distributed/run.py:803] *****************************************
+Namespace(seed=1, use_cuda='True', use_wandb=False, wandb_project_name='test', exp='test', dataset='cifar10', num_samples=512, batch_size=64, amplitude_cut_range=10, phase_cut_range=10, delta=0.3, forward_noise_steps=50, transform_type='wavelet', wavelet_levels=1, def_max_timesteps='1000', def_num_denoising_steps='100', def_sampling_method='ddpm', att_max_timesteps='1000', att_num_denoising_steps='1', att_sampling_method='ddpm', attack_method='pgd', n_iter=200, eot=20, num_ensemble_runs=10)
+rank 1 | world_size 2 started
+dataset len:  512
+def_max_timesteps:  [999]
+def_diffusion_steps:  [[9, 19, 29, 39, 49, 59, 69, 79, 89, 99, 109, 119, 129, 139, 149, 159, 169, 179, 189, 199, 209, 219, 229, 239, 249, 259, 269, 279, 289, 299, 309, 319, 329, 339, 349, 359, 369, 379, 389, 399, 409, 419, 429, 439, 449, 459, 469, 479, 489, 499, 509, 519, 529, 539, 549, 559, 569, 579, 589, 599, 609, 619, 629, 639, 649, 659, 669, 679, 689, 699, 709, 719, 729, 739, 749, 759, 769, 779, 789, 799, 809, 819, 829, 839, 849, 859, 869, 879, 889, 899, 909, 919, 929, 939, 949, 959, 969, 979, 989, 999]]
+def_sampling_method:  ddpm
+att_max_timesteps:  [999]
+att_diffusion_steps:  [[999]]
+att_sampling_method:  ddpm
+Namespace(seed=1, use_cuda='True', use_wandb=False, wandb_project_name='test', exp='test', dataset='cifar10', num_samples=512, batch_size=64, amplitude_cut_range=10, phase_cut_range=10, delta=0.3, forward_noise_steps=50, transform_type='wavelet', wavelet_levels=1, def_max_timesteps='1000', def_num_denoising_steps='100', def_sampling_method='ddpm', att_max_timesteps='1000', att_num_denoising_steps='1', att_sampling_method='ddpm', attack_method='pgd', n_iter=200, eot=20, num_ensemble_runs=10)
+rank 0 | world_size 2 started
+dataset len:  512
+def_max_timesteps:  [999]
+def_diffusion_steps:  [[9, 19, 29, 39, 49, 59, 69, 79, 89, 99, 109, 119, 129, 139, 149, 159, 169, 179, 189, 199, 209, 219, 229, 239, 249, 259, 269, 279, 289, 299, 309, 319, 329, 339, 349, 359, 369, 379, 389, 399, 409, 419, 429, 439, 449, 459, 469, 479, 489, 499, 509, 519, 529, 539, 549, 559, 569, 579, 589, 599, 609, 619, 629, 639, 649, 659, 669, 679, 689, 699, 709, 719, 729, 739, 749, 759, 769, 779, 789, 799, 809, 819, 829, 839, 849, 859, 869, 879, 889, 899, 909, 919, 929, 939, 949, 959, 969, 979, 989, 999]]
+def_sampling_method:  ddpm
+att_max_timesteps:  [999]
+att_diffusion_steps:  [[999]]
+att_sampling_method:  ddpm
