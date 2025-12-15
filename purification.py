@@ -15,7 +15,7 @@ def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
 
 
 class PurificationForward(torch.nn.Module):
-    def __init__(self, clf, diffusion, max_timestep, attack_steps, sampling_method, is_imagenet, device,amplitude_cut_range,phase_cut_range,delta,forward_noise_steps, transform_type='dct', wavelet_levels=2):
+    def __init__(self, clf, diffusion, max_timestep, attack_steps, sampling_method, is_imagenet, device,amplitude_cut_range,phase_cut_range,delta,forward_noise_steps, transform_type='dft', wavelet_levels=2):
         super().__init__()
         self.clf = clf
         self.diffusion = diffusion
@@ -234,7 +234,7 @@ class PurificationForward(torch.nn.Module):
             new_x_0_t_clf = self.wavelet_exchange(x_ref, x_est)
             return clf2diff(new_x_0_t_clf)
         
-        # DCT-based exchange (original)
+        # DFT-based exchange (original)
         x = torch.clip((diff2clf(x)* 255),0,255)
         x_0_t = torch.clip((diff2clf(x_0_t)* 255),0,255)
 

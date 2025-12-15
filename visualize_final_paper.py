@@ -7,7 +7,7 @@ import numpy as np
 
 # Full Dataset Results (512 samples)
 configs = [
-    'DCT Baseline',
+    'DFT Baseline',
     'Wavelet (L=2, δ=0.3)',
     'Wavelet (L=1, δ=0.3)', 
     'Wavelet (L=2, δ=0.1)',

@@ -2,7 +2,7 @@
 
 ## Overview
 
-This report summarizes the implementation of **Wavelet-based Frequency Purification** as an alternative to the original DCT-based approach in the FreqPure defense system.
+This report summarizes the implementation of **Wavelet-based Frequency Purification** as an alternative to the original DFT-based approach in the FreqPure defense system.
 
 ---
 
@@ -14,8 +14,8 @@ FreqPure is a **defense against adversarial attacks** on image classifiers. It w
 3. **Exchanging frequency components** between the original and denoised image
 4. The result is a "purified" image that the classifier can correctly identify
 
-### The Original DCT Approach
-The original paper uses **DCT (Discrete Cosine Transform)** to:
+### The Original DFT Approach
+The original paper uses **DFT (Discrete Fourier Transform)** to:
 - Separate images into frequency components
 - Replace low-frequency amplitude (structure) from the adversarial image
 - Constrain low-frequency phase to stay close to the adversarial image
@@ -27,7 +27,7 @@ The original paper uses **DCT (Discrete Cosine Transform)** to:
 
 ### Why Wavelets?
 
-| Feature | DCT | Wavelet (DWT) |
+| Feature | DFT | Wavelet (DWT) |
 |---------|-----|---------------|
 | **Spatial Info** | Lost (global transform) | Preserved (localized) |
 | **Multi-scale** | Single scale | Natural multi-scale |
@@ -35,7 +35,7 @@ The original paper uses **DCT (Discrete Cosine Transform)** to:
 
 ### What We Changed
 
-We replaced the DCT frequency exchange with a **Haar Wavelet Transform (DWT)** that provides:
+We replaced the DFT frequency exchange with a **Haar Wavelet Transform (DWT)** that provides:
 - **Multi-scale decomposition**: Break image into multiple resolution levels
 - **Spatially localized**: Know WHERE frequencies occur, not just WHAT frequencies
 
@@ -171,7 +171,7 @@ def wavelet_exchange(self, x_ref, x_est):
 
 ### Full CIFAR-10 Evaluation (512 samples)
 
-| Metric | DCT-FreqPure | Wavelet-FreqPure | Change |
+| Metric | DFT-FreqPure | Wavelet-FreqPure | Change |
 |--------|--------------|------------------|--------|
 | **Natural Accuracy** | 94.34% | 83.01% | -11.33% |
 | **Adversarial Accuracy** | 69.73% | **78.13%** | **+8.40%** |
@@ -187,7 +187,7 @@ def wavelet_exchange(self, x_ref, x_est):
    - LL replacement is "aggressive" - might lose some texture
 
 3. **Why This Happens**:
-   - DCT: Global frequency decomposition, circular masks
+   - DFT: Global frequency decomposition, circular masks
    - DWT: Localized decomposition, multi-scale processing
    - Adversarial noise is better separated in wavelet domain
 
@@ -203,7 +203,7 @@ torchrun --nproc_per_node=2 ddp_test.py \
     --wavelet_levels 2 \
     --num_samples 50
 
-# DCT-FreqPure (baseline)
+# DFT-FreqPure (baseline)
 torchrun --nproc_per_node=2 ddp_test.py \
     --transform_type dct \
     --num_samples 50
@@ -227,7 +227,7 @@ FreqPure-main/
 ├── purification.py         # MODIFIED: Added wavelet_exchange method
 ├── ddp_test.py            # MODIFIED: Added CLI arguments
 ├── visualize_comparison.py # NEW: Visualization script
-├── results_dct.txt        # DCT evaluation results
+├── results_dct.txt        # DFT evaluation results
 ├── results_wavelet.txt    # Wavelet evaluation results
 ├── comparison_results/    # Visualization outputs
 │   ├── summary_grid.png
@@ -243,7 +243,7 @@ FreqPure-main/
 1. **Tune δ (delta)**: Try δ=0.1, 0.2, 0.5 to find optimal trade-off
 2. **Try different wavelet levels**: Level 1 (less aggressive) or Level 3 (more aggressive)
 3. **Different wavelets**: Daubechies (db2, db4) instead of Haar
-4. **Hybrid approach**: Blend DCT and DWT results
+4. **Hybrid approach**: Blend DFT and DWT results
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Abstract
 
-We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete Cosine Transform (DCT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DCT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
+We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete Fourier Transform (DFT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DFT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
 
 ---
 
@@ -10,12 +10,12 @@ We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that inte
 
 Adversarial purification aims to remove adversarial perturbations from input images before classification. Diffusion models have emerged as powerful tools for this task due to their ability to project perturbed inputs onto the manifold of natural images. However, standard diffusion purification often struggles to balance robustness (removing attack noise) with fidelity (preserving semantic content).
 
-The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete Cosine Transform (DCT)** to strictly preserve low-frequency amplitude and phase. While effective, DCT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
+The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete Fourier Transform (DFT)** to strictly preserve low-frequency amplitude and phase. While effective, DFT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
 
-We introduce **Wavelet-FreqPure**, which replaces DCT with the **Discrete Wavelet Transform (DWT)**. Wavelets provide a multi-resolution analysis, decomposing the image into a coarse approximation and detailed subbands at various scales. This allows our method to:
+We introduce **Wavelet-FreqPure**, which replaces DFT with the **Discrete Wavelet Transform (DWT)**. Wavelets provide a multi-resolution analysis, decomposing the image into a coarse approximation and detailed subbands at various scales. This allows our method to:
 1.  Isolate adversarial noise in specific detail subbands.
 2.  Preserve semantic structure via the coarse approximation subband (LL).
-3.  Maintain spatial context, preventing the "ringing" artifacts common in DCT.
+3.  Maintain spatial context, preventing the "ringing" artifacts common in DFT.
 
 ---
 
@@ -77,13 +77,13 @@ where $D \in \{LH, HL, HH\}$. This effectively "guides" the diffusion generation
 
 ## 4. Results and Analysis
 
-We compared our Wavelet-FreqPure against the original DCT-FreqPure baseline across various configurations.
+We compared our Wavelet-FreqPure against the original DFT-FreqPure baseline across various configurations.
 
 ### 4.1 Comprehensive Comparison (512 Samples)
 
 | Method | Configuration | Natural Acc | Adversarial Acc | Improvement (Adv) |
 | :--- | :--- | :--- | :--- | :--- |
-| **DCT-FreqPure** | $\delta=0.3$ (Baseline) | **94.34%** | 69.73% | -- |
+| **DFT-FreqPure** | $\delta=0.3$ (Baseline) | **94.34%** | 69.73% | -- |
 | **Wavelet-FreqPure** | Level 1, $\delta=0.3$ | 92.77% | 80.27% | +10.54% |
 | **Wavelet-FreqPure** | **Level 2, $\delta=0.1$** | 88.87% | **85.55%** | **+15.82%** |
 | Wavelet-FreqPure | Level 3, $\delta=0.3$ | 58.01% | 51.37% | -18.36% |
@@ -91,7 +91,7 @@ We compared our Wavelet-FreqPure against the original DCT-FreqPure baseline acro
 ### 4.2 Analysis of Results
 
 #### Superior Robustness of Wavelets (Level 2)
-The **Level 2, $\delta=0.1$** configuration achieved the state-of-the-art result of **85.55%** adversarial accuracy. This massive 15.8% boost over the DCT baseline validates our hypothesis:
+The **Level 2, $\delta=0.1$** configuration achieved the state-of-the-art result of **85.55%** adversarial accuracy. This massive 15.8% boost over the DFT baseline validates our hypothesis:
 *   The Level 2 decomposition ($8 \times 8$ LL subband) strikes the perfect balance. It preserves enough coarse structure to guide the diffusion model accurately.
 *   The tight $\delta=0.1$ constraint on details prevents the diffusion model from hallucinating artifacts while still allowing it to scrub low-magnitude adversarial noise.
 
@@ -102,16 +102,16 @@ The **Level 2, $\delta=0.1$** configuration achieved the state-of-the-art result
 #### Failure Mode: Level 3
 The **Level 3** experiment was a critical negative result. With a $4 \times 4$ LL subband, the semantic guidance became too coarse. The diffusion model essentially lost the "blueprint" of the image, leading to a collapse in performance (~58% accuracy). This sets a clear lower bound on the resolution required for effective frequency-guided purification on CIFAR-10.
 
-### 4.3 Why Wavelet > DCT?
-Visual analysis (see generated plots) suggests that DCT introduces global high-frequency noise when trying to purify sharp edges (ringing). Wavelets, being spatially localized, can clean the "sky" part of an image differently from the "car" part. The multi-scale approach allows the defense to be **scale-invariant** to perturbations, removing both broad, low-frequency attacks and sharp, pixel-level noise.
+### 4.3 Why Wavelet > DFT?
+Visual analysis (see generated plots) suggests that DFT introduces global high-frequency noise when trying to purify sharp edges (ringing). Wavelets, being spatially localized, can clean the "sky" part of an image differently from the "car" part. The multi-scale approach allows the defense to be **scale-invariant** to perturbations, removing both broad, low-frequency attacks and sharp, pixel-level noise.
 
 ---
 
 ## 5. Conclusion
 
-We have successfully demonstrated that replacing the global DCT with a multi-scale **Wavelet Transform** significantly enhances the robustness of diffusion-based adversarial purification.
+We have successfully demonstrated that replacing the global DFT with a multi-scale **Wavelet Transform** significantly enhances the robustness of diffusion-based adversarial purification.
 *   **Best Config**: Level 2 decomposition with tight detail constraint ($\delta=0.1$).
-*   **Key Result**: **85.55%** Adversarial Accuracy (+15.8% over DCT baseline).
+*   **Key Result**: **85.55%** Adversarial Accuracy (+15.8% over DFT baseline).
 
 Wavelet-FreqPure offers a more granular, spatially-aware control over image frequencies, making it a superior choice for defending against sophisticated adversarial attacks.
 
@@ -121,7 +121,7 @@ Wavelet-FreqPure offers a more granular, spatially-aware control over image freq
 
 | Experiment | Natural Acc | Adversarial Acc | Log File |
 | :--- | :--- | :--- | :--- |
-| DCT Baseline | 94.34% | 69.73% | results_dct.txt |
+| DFT Baseline | 94.34% | 69.73% | d.txt |
 | Wavelet L=1, $\delta=0.3$ | 92.77% | 80.27% | full_level1_delta03.txt |
 | Wavelet L=2, $\delta=0.1$ | 88.87% | 85.55% | full_level2_delta01.txt |
 | Wavelet L=3, $\delta=0.3$ | 58.01% | 51.37% | full_level3_delta03.txt |

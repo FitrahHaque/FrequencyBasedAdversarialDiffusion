@@ -244,8 +244,8 @@ def parse_args():
     parser.add_argument('--phase_cut_range', type=int, default=10)
     parser.add_argument('--delta', type=float, default=0.3)
     parser.add_argument('--forward_noise_steps',type=float,default=50)
-    parser.add_argument('--transform_type', type=str, default='dct', choices=['dct', 'wavelet'],
-                        help='Transform for frequency purification: dct (original) or wavelet')
+    parser.add_argument('--transform_type', type=str, default='dft', choices=['dft', 'wavelet'],
+                        help='Transform for frequency purification: dft (original) or wavelet')
     parser.add_argument('--wavelet_levels', type=int, default=2,
                         help='Number of wavelet decomposition levels (only used if transform_type=wavelet)')
     # Purification hyperparameters in defense
