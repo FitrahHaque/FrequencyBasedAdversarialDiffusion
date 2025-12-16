@@ -51,7 +51,7 @@ $$ LL_L^{purified} = LL_L^{adv} $$
 This ensures the purified image does not "drift" away from the original image's content (e.g., changing a cat to a dog).
 
 #### B. Detail Purification (Soft Constraint)
-Adversarial perturbations are concentrated in the high-frequency detail subbands ($LH_l, HL_l, HH_l$ for $l=1...L$). However, these bands also contain genuine texture. We apply a **soft projection** that allows the diffusion model to denoise these bands but constrains them to stay within a $\delta$-ball of the original input:
+Adversarial perturbations are concentrated in the high-frequency detail subbands ($LH_l, HL_l, HH_l$ for $l=1...L$). H We apply a **soft projection** that allows the diffusion model to denoise these bands but constrains them to stay owever, these bands also contain genuine texture.within a $\delta$-ball of the original input:
 
 $$ D_l^{purified} = \text{clamp}(D_l^{diff}, D_l^{adv} - \delta, D_l^{adv} + \delta) $$
 
@@ -59,8 +59,32 @@ where $D \in \{LH, HL, HH\}$. This effectively "guides" the diffusion generation
 
 ### 2.4 Implementation Details
 
-*   **Differentiable Wavelets**: We implemented a custom PyTorch module for 2D Haar DWT and IDWT to ensure the entire pipeline remains differentiable, allowing gradients to flow if needed (though used here in inference).
-*   **Padding**: To handle non-power-of-2 dimensions in recursive levels, we implemented symmetric padding.
+We implemented a custom, differentiable 2D Haar Discrete Wavelet Transform (DWT) in PyTorch to ensure gradient compatibility. The implementation avoids external libraries by utilizing efficient tensor slicing and convolution-equivalent operations.
+
+#### A. Haar Wavelet Transform (Single Level)
+For an input tensor $X$ of dimensions $(B, C, H, W)$, the single-level decomposition is computed via row-wise and column-wise averaging (low-pass) and differencing (high-pass).
+
+1.  **Row Decomposition**:
+    *   $L_{row} = (X_{:,:,:,2i} + X_{:,:,:,2i+1}) / 2$
+    *   $H_{row} = (X_{:,:,:,2i} - X_{:,:,:,2i+1}) / 2$
+
+2.  **Column Decomposition** (applied to $L_{row}$ and $H_{row}$):
+    *   **LL** (Approximation): $(L_{row[:,:,2j,:]} + L_{row[:,:,2j+1,:]}) / 2$
+    *   **HL** (Vertical Details): $(L_{row[:,:,2j,:]} - L_{row[:,:,2j+1,:]}) / 2$
+    *   **LH** (Horizontal Details): $(H_{row[:,:,2j,:]} + H_{row[:,:,2j+1,:]}) / 2$
+    *   **HH** (Diagonal Details): $(H_{row[:,:,2j,:]} - H_{row[:,:,2j+1,:]}) / 2$
+
+This operation reduces the spatial resolution by exactly half ($H/2, W/2$) for each subband.
+
+#### B. Multi-Level Recursive Decomposition
+For a decomposition of level $L > 1$, we recursively apply the Forward DWT to the **LL** subband of the previous level:
+
+$$ \text{DWT}(LL_{k-1}) \rightarrow \{LL_k, LH_k, HL_k, HH_k\} $$
+
+The implementation handles arbitrary input sizes by applying symmetric padding if the spatial dimensions are odd before any decomposition step.
+
+#### C. Inverse Transform (IDWT)
+Reconstruction is performed by interleaving the columns and rows of the respective Low and High bands, reversing the decomposition steps exactly to ensure perfect reconstruction (up to floating-point precision) of the signal in the absence of modification.
 
 ---
 
