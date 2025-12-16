@@ -58,7 +58,7 @@ def visualize_comparison(num_samples=10, save_dir='./comparison_results'):
         clf=clf, diffusion=diffusion, is_imagenet=False,
         max_timestep=def_max_timesteps, attack_steps=def_diffusion_steps,
         forward_noise_steps=50, amplitude_cut_range=10, phase_cut_range=10,
-        delta=0.3, device=device, sampling_method='ddpm',
+        delta=0.1, device=device, sampling_method='ddpm',
         transform_type='wavelet', wavelet_levels=2
     )
     
