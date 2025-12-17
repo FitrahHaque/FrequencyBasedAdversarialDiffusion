@@ -2,7 +2,7 @@
 
 ## Abstract
 
-We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete DFT Transform (DFT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DFT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
+We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete Fourier Transform (DFT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DFT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
 
 ---
 
@@ -10,7 +10,7 @@ We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that inte
 
 Adversarial purification aims to remove adversarial perturbations from input images before classification. Diffusion models have emerged as powerful tools for this task due to their ability to project perturbed inputs onto the manifold of natural images. However, standard diffusion purification often struggles to balance robustness (removing attack noise) with fidelity (preserving semantic content).
 
-The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete DFT Transform (DFT)** to strictly preserve low-frequency amplitude and phase. While effective, DFT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
+The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete Fourier Transform (DFT)** to strictly preserve low-frequency amplitude and phase. While effective, DFT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
 
 We introduce **Wavelet-FreqPure**, which replaces DFT with the **Discrete Wavelet Transform (DWT)**. Wavelets provide a multi-resolution analysis, decomposing the image into a coarse approximation and detailed subbands at various scales. This allows our method to:
 1.  Isolate adversarial noise in specific detail subbands.
