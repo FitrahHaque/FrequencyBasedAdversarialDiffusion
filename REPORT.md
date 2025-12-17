@@ -15,7 +15,7 @@ FreqPure is a **defense against adversarial attacks** on image classifiers. It w
 4. The result is a "purified" image that the classifier can correctly identify
 
 ### The Original DFT Approach
-The original paper uses **DFT (Discrete DFT Transform)** to:
+The original paper uses **DFT (Discrete Fourier Transform)** to:
 - Separate images into frequency components
 - Replace low-frequency amplitude (structure) from the adversarial image
 - Constrain low-frequency phase to stay close to the adversarial image
