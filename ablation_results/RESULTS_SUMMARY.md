@@ -8,7 +8,7 @@ All experiments run on 50 CIFAR-10 samples with:
 
 | Configuration | Levels | Delta | Natural Acc | Adversarial Acc | Notes |
 |--------------|--------|-------|-------------|-----------------|-------|
-| **DCT Baseline** | - | 0.3 | 94.34% | 69.73% | Original method (512 samples) |
+| **DFT Baseline** | - | 0.3 | 94.34% | 69.73% | Original method (512 samples) |
 | Wavelet | 1 | 0.3 | **98%** | 82% | Best natural accuracy |
 | Wavelet | 2 | 0.1 | 88% | **90%** | **Best adversarial accuracy** |
 | Wavelet | 2 | 0.2 | 84% | 72% | Similar to baseline |
@@ -54,5 +54,5 @@ For adversarial robustness: **Level 2, Delta 0.1** → 88% natural, **90% advers
 - `results_level3_delta03.txt` - Level 3, δ=0.3
 
 ## Full Dataset Results (512 samples)
-- `../results_dct.txt` - DCT baseline (94.34% nat, 69.73% adv)
+- `../results_dft.txt` - DFT baseline (94.34% nat, 69.73% adv)
 - `../results_wavelet.txt` - Level 2, δ=0.3 (83.01% nat, 78.13% adv)

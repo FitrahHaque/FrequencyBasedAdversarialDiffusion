@@ -2,7 +2,7 @@
 
 ## Abstract
 
-We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete Fourier Transform (DFT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DFT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
+We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that integrates a multi-level Haar Wavelet Transform into the diffusion-based purification pipeline. Unlike the original FreqPure which relies on the global Discrete DFT Transform (DFT), our approach exploits the spatial-frequency locality of wavelets to selectively purify adversarial perturbations at different scales. We conduct a comprehensive evaluation on CIFAR-10, demonstrating that our **Level 2** decomposition scheme achieves **85.55% adversarial accuracy**, significantly outperforming the DFT baseline (69.73%) by **+15.82%**, while identifying critical trade-offs between decomposition depth and image structure preservation.
 
 ---
 
@@ -10,7 +10,7 @@ We propose **Wavelet-FreqPure**, a novel adversarial defense mechanism that inte
 
 Adversarial purification aims to remove adversarial perturbations from input images before classification. Diffusion models have emerged as powerful tools for this task due to their ability to project perturbed inputs onto the manifold of natural images. However, standard diffusion purification often struggles to balance robustness (removing attack noise) with fidelity (preserving semantic content).
 
-The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete Fourier Transform (DFT)** to strictly preserve low-frequency amplitude and phase. While effective, DFT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
+The **FreqPure** framework addresses this by incorporating frequency-domain guidance. It assumes that adversarial noise dominates high-frequency components while semantic content resides in low frequencies. The original implementation uses the **Discrete DFT Transform (DFT)** to strictly preserve low-frequency amplitude and phase. While effective, DFT's global nature lacks spatial localization, potentially allowing localized adversarial features to persist or forcing the removal of genuine texture.
 
 We introduce **Wavelet-FreqPure**, which replaces DFT with the **Discrete Wavelet Transform (DWT)**. Wavelets provide a multi-resolution analysis, decomposing the image into a coarse approximation and detailed subbands at various scales. This allows our method to:
 1.  Isolate adversarial noise in specific detail subbands.
@@ -51,7 +51,7 @@ $$ LL_L^{purified} = LL_L^{adv} $$
 This ensures the purified image does not "drift" away from the original image's content (e.g., changing a cat to a dog).
 
 #### B. Detail Purification (Soft Constraint)
-Adversarial perturbations are concentrated in the high-frequency detail subbands ($LH_l, HL_l, HH_l$ for $l=1...L$). H We apply a **soft projection** that allows the diffusion model to denoise these bands but constrains them to stay owever, these bands also contain genuine texture.within a $\delta$-ball of the original input:
+Adversarial perturbations are concentrated in the high-frequency detail subbands ($LH_l, HL_l, HH_l$ for $l=1...L$). However, these bands also contain genuine texture. We apply a **soft projection** that allows the diffusion model to denoise these bands but constrains them to stay within a $\delta$-ball of the original input:
 
 $$ D_l^{purified} = \text{clamp}(D_l^{diff}, D_l^{adv} - \delta, D_l^{adv} + \delta) $$
 
@@ -59,32 +59,8 @@ where $D \in \{LH, HL, HH\}$. This effectively "guides" the diffusion generation
 
 ### 2.4 Implementation Details
 
-We implemented a custom, differentiable 2D Haar Discrete Wavelet Transform (DWT) in PyTorch to ensure gradient compatibility. The implementation avoids external libraries by utilizing efficient tensor slicing and convolution-equivalent operations.
-
-#### A. Haar Wavelet Transform (Single Level)
-For an input tensor $X$ of dimensions $(B, C, H, W)$, the single-level decomposition is computed via row-wise and column-wise averaging (low-pass) and differencing (high-pass).
-
-1.  **Row Decomposition**:
-    *   $L_{row} = (X_{:,:,:,2i} + X_{:,:,:,2i+1}) / 2$
-    *   $H_{row} = (X_{:,:,:,2i} - X_{:,:,:,2i+1}) / 2$
-
-2.  **Column Decomposition** (applied to $L_{row}$ and $H_{row}$):
-    *   **LL** (Approximation): $(L_{row[:,:,2j,:]} + L_{row[:,:,2j+1,:]}) / 2$
-    *   **HL** (Vertical Details): $(L_{row[:,:,2j,:]} - L_{row[:,:,2j+1,:]}) / 2$
-    *   **LH** (Horizontal Details): $(H_{row[:,:,2j,:]} + H_{row[:,:,2j+1,:]}) / 2$
-    *   **HH** (Diagonal Details): $(H_{row[:,:,2j,:]} - H_{row[:,:,2j+1,:]}) / 2$
-
-This operation reduces the spatial resolution by exactly half ($H/2, W/2$) for each subband.
-
-#### B. Multi-Level Recursive Decomposition
-For a decomposition of level $L > 1$, we recursively apply the Forward DWT to the **LL** subband of the previous level:
-
-$$ \text{DWT}(LL_{k-1}) \rightarrow \{LL_k, LH_k, HL_k, HH_k\} $$
-
-The implementation handles arbitrary input sizes by applying symmetric padding if the spatial dimensions are odd before any decomposition step.
-
-#### C. Inverse Transform (IDWT)
-Reconstruction is performed by interleaving the columns and rows of the respective Low and High bands, reversing the decomposition steps exactly to ensure perfect reconstruction (up to floating-point precision) of the signal in the absence of modification.
+*   **Differentiable Wavelets**: We implemented a custom PyTorch module for 2D Haar DWT and IDWT to ensure the entire pipeline remains differentiable, allowing gradients to flow if needed (though used here in inference).
+*   **Padding**: To handle non-power-of-2 dimensions in recursive levels, we implemented symmetric padding.
 
 ---
 
@@ -145,7 +121,7 @@ Wavelet-FreqPure offers a more granular, spatially-aware control over image freq
 
 | Experiment | Natural Acc | Adversarial Acc | Log File |
 | :--- | :--- | :--- | :--- |
-| DFT Baseline | 94.34% | 69.73% | d.txt |
+| DFT Baseline | 94.34% | 69.73% | results_dft.txt |
 | Wavelet L=1, $\delta=0.3$ | 92.77% | 80.27% | full_level1_delta03.txt |
 | Wavelet L=2, $\delta=0.1$ | 88.87% | 85.55% | full_level2_delta01.txt |
 | Wavelet L=3, $\delta=0.3$ | 58.01% | 51.37% | full_level3_delta03.txt |

@@ -6,7 +6,7 @@ import numpy as np
 
 # Ablation study results
 results = {
-    'DCT Baseline': {'levels': '-', 'delta': 0.3, 'nat': 94.34, 'adv': 69.73, 'samples': 512},
+    'DFT Baseline': {'levels': '-', 'delta': 0.3, 'nat': 94.34, 'adv': 69.73, 'samples': 512},
     'Level1_d0.3': {'levels': 1, 'delta': 0.3, 'nat': 98, 'adv': 82, 'samples': 50},
     'Level2_d0.1': {'levels': 2, 'delta': 0.1, 'nat': 88, 'adv': 90, 'samples': 50},
     'Level2_d0.2': {'levels': 2, 'delta': 0.2, 'nat': 84, 'adv': 72, 'samples': 50},
@@ -94,7 +94,7 @@ for i, lv in enumerate(levels):
 ax4 = fig.add_subplot(2, 2, 4)
 
 for name, data in results.items():
-    if name == 'DCT Baseline':
+    if name == 'DFT Baseline':
         marker = 'D'
         color = '#2196F3'
         size = 200
@@ -135,7 +135,7 @@ ax.axis('off')
 
 table_data = [
     ['Configuration', 'Levels', 'Delta', 'Natural Acc', 'Adv Acc', 'Notes'],
-    ['DCT Baseline', '-', '0.3', '94.34%', '69.73%', 'Original (512 samples)'],
+    ['DFT Baseline', '-', '0.3', '94.34%', '69.73%', 'Original (512 samples)'],
     ['Wavelet L1', '1', '0.3', '98%', '82%', 'Best natural'],
     ['Wavelet L2', '2', '0.1', '88%', '90%', '★ BEST ROBUST'],
     ['Wavelet L2', '2', '0.2', '84%', '72%', ''],

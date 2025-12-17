@@ -15,7 +15,7 @@ FreqPure is a **defense against adversarial attacks** on image classifiers. It w
 4. The result is a "purified" image that the classifier can correctly identify
 
 ### The Original DFT Approach
-The original paper uses **DFT (Discrete Fourier Transform)** to:
+The original paper uses **DFT (Discrete DFT Transform)** to:
 - Separate images into frequency components
 - Replace low-frequency amplitude (structure) from the adversarial image
 - Constrain low-frequency phase to stay close to the adversarial image
@@ -91,7 +91,7 @@ Original Image (32x32)
 
 ```python
 # NEW Parameters added to __init__:
-transform_type='dct'    # 'dct' (original) or 'wavelet' (new)
+transform_type='dft'    # 'dft' (original) or 'wavelet' (new)
 wavelet_levels=2        # Number of decomposition levels
 
 # NEW Method added:
@@ -140,7 +140,7 @@ def wavelet_exchange(self, x_ref, x_est):
 
 **New command-line arguments:**
 ```bash
---transform_type dct|wavelet   # Choose which method to use
+--transform_type dft|wavelet   # Choose which method to use
 --wavelet_levels 2             # Number of decomposition levels
 ```
 
@@ -205,7 +205,7 @@ torchrun --nproc_per_node=2 ddp_test.py \
 
 # DFT-FreqPure (baseline)
 torchrun --nproc_per_node=2 ddp_test.py \
-    --transform_type dct \
+    --transform_type dft \
     --num_samples 50
 ```
 
@@ -227,7 +227,7 @@ FreqPure-main/
 ├── purification.py         # MODIFIED: Added wavelet_exchange method
 ├── ddp_test.py            # MODIFIED: Added CLI arguments
 ├── visualize_comparison.py # NEW: Visualization script
-├── results_dct.txt        # DFT evaluation results
+├── results_dft.txt        # DFT evaluation results
 ├── results_wavelet.txt    # Wavelet evaluation results
 ├── comparison_results/    # Visualization outputs
 │   ├── summary_grid.png

@@ -20,7 +20,9 @@ from purification import PurificationForward
 from utils import copy_source
 from path import *
 from PIL import Image
+from frequency_masks import RadialHardFrequencyMask, RadialSoftFrequencyMask
 import shutil
+from wavelet_utils import WaveletBandMixer
 
 def save_img(idx,img,pred,y,name):
     
@@ -84,8 +86,8 @@ def test(rank, world_size, args):
     device = torch.device('cuda:{}'.format(rank))
 
     # Load dataset
-    assert args.num_samples % args.batch_size == 0, f'num_samples ({args.num_samples}) must be divisible by batch_size ({args.batch_size})'
-    testset = load_dataset_by_name(args.dataset, dataset_root, args.num_samples)
+    assert 512 % args.batch_size == 0
+    testset = load_dataset_by_name(args.dataset, dataset_root, 512)
     testsampler = torch.utils.data.distributed.DistributedSampler(testset,
                                                                 num_replicas=world_size,
                                                                 rank=rank)
@@ -118,13 +120,101 @@ def test(rank, world_size, args):
         # Load models
         clf, diffusion = load_models(args, model_src, device)
 
+        if args.freq_mask_type == 'hard':
+            amp_mask = RadialHardFrequencyMask(
+                cutoff=args.amplitude_cut_range,
+                device=device,
+                learnable=args.learn_freq_masks,
+            )
+            phase_mask = RadialHardFrequencyMask(
+                cutoff=args.phase_cut_range,
+                device=device,
+                learnable=args.learn_freq_masks,
+            )
+        else:  # 'soft'
+            amp_mask = RadialSoftFrequencyMask(
+                init_cutoff=args.amplitude_cut_range,
+                init_sharpness=10.0,
+                device=device,
+                learnable=args.learn_freq_masks,
+            )
+            phase_mask = RadialSoftFrequencyMask(
+                init_cutoff=args.phase_cut_range,
+                init_sharpness=10.0,
+                device=device,
+                learnable=args.learn_freq_masks,
+            )
+
+        wavelet_mixer = None
+        if args.transform_type == 'wavelet':
+            wavelet_mixer = WaveletBandMixer(learnable=False).to(device)
+
+        learned_delta = None
+
+        if args.freq_mask_checkpoint is not None:
+            print(f"Loading frequency masks from: {args.freq_mask_checkpoint}")
+            ckpt = torch.load(args.freq_mask_checkpoint, map_location=device)
+
+            if ckpt.get("transform_type", "dft") == "dft" and "amp_mask" in ckpt:
+                amp_mask.load_state_dict(ckpt["amp_mask"])
+                phase_mask.load_state_dict(ckpt["phase_mask"])
+
+            if "wavelet_mixer" in ckpt and wavelet_mixer is not None:
+                wavelet_mixer.load_state_dict(ckpt["wavelet_mixer"])
+                print("Loaded wavelet mixer from checkpoint.")
+
+            if "delta" in ckpt:
+                learned_delta = ckpt["delta"].to(device)
+                print(f"Loaded learned delta: {learned_delta.item():.4f}")
+            else:
+                print("No delta found in checkpoint; using args.delta.")
+
+        if learned_delta is not None:
+            delta_to_use = float(learned_delta.item())
+        else:
+            delta_to_use = args.delta  
+        
+
         # Set diffusion process for attack and defense
-        attack_forward = PurificationForward(clf=clf, diffusion=diffusion, is_imagenet=is_imagenet,max_timestep=att_max_timesteps,attack_steps=att_diffusion_steps,forward_noise_steps = args.forward_noise_steps,
-                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.att_sampling_method,
-                                            transform_type=args.transform_type, wavelet_levels=args.wavelet_levels)
-        defense_forward = PurificationForward(clf=clf, diffusion=diffusion, is_imagenet=is_imagenet,max_timestep=def_max_timesteps,attack_steps=def_diffusion_steps,forward_noise_steps = args.forward_noise_steps,
-                                            amplitude_cut_range=args.amplitude_cut_range,phase_cut_range=args.phase_cut_range,delta=args.delta,device=device,sampling_method=args.def_sampling_method,
-                                            transform_type=args.transform_type, wavelet_levels=args.wavelet_levels)
+        attack_forward = PurificationForward(
+            clf=clf,
+            diffusion=diffusion,
+            is_imagenet=is_imagenet,
+            max_timestep=att_max_timesteps,
+            attack_steps=att_diffusion_steps,
+            forward_noise_steps=args.forward_noise_steps,
+            amplitude_cut_range=args.amplitude_cut_range,
+            phase_cut_range=args.phase_cut_range,
+            delta=delta_to_use,
+            device=device,
+            sampling_method=args.att_sampling_method,
+            amplitude_mask=amp_mask,
+            phase_mask=phase_mask,
+            learnable_delta=False,
+            transform_type=args.transform_type,
+            wavelet_levels=args.wavelet_levels,
+            wavelet_mixer=wavelet_mixer,
+        )
+
+        defense_forward = PurificationForward(
+            clf=clf,
+            diffusion=diffusion,
+            is_imagenet=is_imagenet,
+            max_timestep=def_max_timesteps,
+            attack_steps=def_diffusion_steps,
+            forward_noise_steps=args.forward_noise_steps,
+            amplitude_cut_range=args.amplitude_cut_range,
+            phase_cut_range=args.phase_cut_range,
+            delta=delta_to_use,
+            device=device,
+            sampling_method=args.def_sampling_method,
+            amplitude_mask=amp_mask,
+            phase_mask=phase_mask,
+            learnable_delta=False,
+            transform_type=args.transform_type,
+            wavelet_levels=args.wavelet_levels,
+            wavelet_mixer=wavelet_mixer,
+        )
 
         # Set adversarial attack
         if args.dataset == 'cifar10':
@@ -196,12 +286,12 @@ def test(rank, world_size, args):
             
             pure_adv,pred_adv = predict(x_adv, args, defense_forward, num_classes)
             correct_adv += pred_adv.eq(y.view_as(pred_adv)).sum().item()
-            save_img(idx,pure_adv,pred_adv,y,'adv')
+            save_img(idx, pure_adv, pred_adv, y, 'adv')
             print('-'*30)
             pure_nat,pred_nat = predict(x, args, defense_forward, num_classes)
             correct_nat += pred_nat.eq(y.view_as(pred_nat)).sum().item()
 
-            save_img(idx,pure_nat,pred_nat,y,'nat')
+            save_img(idx, pure_nat, pred_nat, y, 'nat')
 
         total += x.shape[0]
 
@@ -237,17 +327,11 @@ def parse_args():
     parser.add_argument('--exp', type=str, default='test', help='Experiment name')
     parser.add_argument("--dataset", type=str, default='cifar10',
                         choices=['cifar10', 'imagenet', 'svhn'])
-    parser.add_argument('--num_samples', type=int, default=512,
-                        help='Number of test samples to use')
     parser.add_argument('--batch_size', type=int, default=64)
     parser.add_argument('--amplitude_cut_range', type=int, default=10)
     parser.add_argument('--phase_cut_range', type=int, default=10)
     parser.add_argument('--delta', type=float, default=0.3)
     parser.add_argument('--forward_noise_steps',type=float,default=50)
-    parser.add_argument('--transform_type', type=str, default='dft', choices=['dft', 'wavelet'],
-                        help='Transform for frequency purification: dft (original) or wavelet')
-    parser.add_argument('--wavelet_levels', type=int, default=2,
-                        help='Number of wavelet decomposition levels (only used if transform_type=wavelet)')
     # Purification hyperparameters in defense
     parser.add_argument("--def_max_timesteps", type=str, default='1000',
                         help='The number of forward steps for each purification step in defense')
@@ -272,6 +356,22 @@ def parse_args():
                         help='The number of EOT samples for the attack')
     parser.add_argument('--num_ensemble_runs', type=int, default=10,
                         help='The number of ensemble runs for purification in defense')
+
+    parser.add_argument('--freq_mask_type', type=str, default='hard',
+                        choices=['hard', 'soft'],
+                        help='Type of frequency mask to use in FreqPure.')
+    parser.add_argument('--learn_freq_masks', action='store_true',
+                        help='If set, radial frequency masks are learnable.')
+    parser.add_argument('--learn_delta', action='store_true',
+                        help='If set, make PSP delta a learnable parameter.')
+
+    parser.add_argument("--freq_mask_checkpoint", type=str, default=None,
+                        help="Path to trained frequency mask checkpoint (from train_freq_masks.py).")
+    
+    parser.add_argument('--transform_type', type=str, default='dft', choices=['dft', 'wavelet'],
+                        help='Transform for frequency purification: dft (original) or wavelet')
+    parser.add_argument('--wavelet_levels', type=int, default=2,
+                        help='Number of wavelet decomposition levels (only used if transform_type=wavelet)')
 
     args = parser.parse_args()
 

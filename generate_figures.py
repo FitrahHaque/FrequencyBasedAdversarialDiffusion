@@ -9,10 +9,10 @@ from PIL import Image
 import os
 
 def create_results_bar_chart(save_path='./comparison_results/accuracy_comparison.png'):
-    """Create bar chart comparing DCT vs Wavelet accuracy."""
+    """Create bar chart comparing DFT vs Wavelet accuracy."""
     
     # Results from experiments
-    methods = ['DCT-FreqPure\n(Baseline)', 'Wavelet-FreqPure\n(Ours)']
+    methods = ['DFT-FreqPure\n(Baseline)', 'Wavelet-FreqPure\n(Ours)']
     natural_acc = [94.34, 83.01]
     adv_acc = [69.73, 78.13]
     
@@ -42,7 +42,7 @@ def create_results_bar_chart(save_path='./comparison_results/accuracy_comparison
             fontweight='bold', color='blue', va='center')
     
     ax.set_ylabel('Accuracy (%)', fontsize=14)
-    ax.set_title('DCT vs Wavelet FreqPure Comparison\n(CIFAR-10, 512 samples, PGD-200 Attack)', 
+    ax.set_title('DFT vs Wavelet FreqPure Comparison\n(CIFAR-10, 512 samples, PGD-200 Attack)', 
                  fontsize=16, fontweight='bold')
     ax.set_xticks(x)
     ax.set_xticklabels(methods, fontsize=12)
@@ -205,7 +205,7 @@ def create_trade_off_plot(save_path='./comparison_results/tradeoff_analysis.png'
     ax1 = axes[0]
     
     # Data points
-    methods = ['DCT-FreqPure', 'Wavelet-FreqPure']
+    methods = ['DFT-FreqPure', 'Wavelet-FreqPure']
     nat_acc = [94.34, 83.01]
     adv_acc = [69.73, 78.13]
     colors = ['#2196F3', '#FF5722']
@@ -232,9 +232,9 @@ def create_trade_off_plot(save_path='./comparison_results/tradeoff_analysis.png'
     ax2 = axes[1]
     
     categories = ['Natural\nAccuracy', 'Adversarial\nAccuracy']
-    dct_vals = [94.34, 69.73]
+    dft_vals = [94.34, 69.73]
     wav_vals = [83.01, 78.13]
-    changes = [wav_vals[0] - dct_vals[0], wav_vals[1] - dct_vals[1]]
+    changes = [wav_vals[0] - dft_vals[0], wav_vals[1] - dft_vals[1]]
     bar_colors = ['#F44336' if c < 0 else '#4CAF50' for c in changes]
     
     x = np.arange(len(categories))
@@ -249,7 +249,7 @@ def create_trade_off_plot(save_path='./comparison_results/tradeoff_analysis.png'
     ax2.set_xticks(x)
     ax2.set_xticklabels(categories, fontsize=12)
     ax2.set_ylabel('Change in Accuracy (%)', fontsize=12)
-    ax2.set_title('Wavelet vs DCT: Accuracy Changes', fontsize=14, fontweight='bold')
+    ax2.set_title('Wavelet vs DFT: Accuracy Changes', fontsize=14, fontweight='bold')
     ax2.set_ylim(-15, 12)
     ax2.grid(axis='y', alpha=0.3)
     
@@ -305,7 +305,7 @@ def create_combined_summary(save_path='./comparison_results/full_summary.png'):
     # --- Top Right: Results Comparison ---
     ax2 = fig.add_subplot(gs[0, 1])
     
-    methods = ['DCT\n(Baseline)', 'Wavelet\n(Ours)']
+    methods = ['DFT\n(Baseline)', 'Wavelet\n(Ours)']
     natural_acc = [94.34, 83.01]
     adv_acc = [69.73, 78.13]
     
@@ -395,9 +395,9 @@ def create_combined_summary(save_path='./comparison_results/full_summary.png'):
         --wavelet_levels 2 \\
         --num_samples 50
     
-    # Run with DCT-FreqPure (baseline):
+    # Run with DFT-FreqPure (baseline):
     torchrun --nproc_per_node=2 ddp_test.py \\
-        --transform_type dct \\
+        --transform_type dft \\
         --num_samples 50
     
     # Parameters:

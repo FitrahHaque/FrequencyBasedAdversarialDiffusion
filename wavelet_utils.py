@@ -3,6 +3,7 @@ Wavelet Utilities for FreqPure
 Implements differentiable 2D Haar Wavelet Transform (DWT) and Inverse DWT (IDWT).
 """
 import torch
+import torch.nn as nn        
 import torch.nn.functional as F
 
 
@@ -139,3 +140,69 @@ def multi_level_idwt(LL, coeffs, pads_list):
             curr_LL = curr_LL[:, :, :h - pad_h, :w - pad_w]
             
     return curr_LL
+class WaveletBandMixer(nn.Module):
+    """
+    Tiny learnable mixer for wavelet subbands.
+
+    Learns 4 global weights (one for each band: LL, LH, HL, HH) and
+    interpolates between reference (x_ref) and estimate (x_est) coefficients:
+
+        new = w * ref + (1 - w) * est
+
+    This is your "small mask learning" module for Combo C.
+    """
+
+    def __init__(
+        self,
+        init_weights=(0.8, 0.3, 0.3, 0.3),
+        learnable: bool = True,
+    ) -> None:
+        super().__init__()
+        init_w = torch.tensor(init_weights, dtype=torch.float32)
+        eps = 1e-4
+        init_w = init_w.clamp(eps, 1 - eps)
+        logits = torch.log(init_w) - torch.log(1 - init_w)  # inverse sigmoid
+
+        if learnable:
+            self.logit_weights = nn.Parameter(logits)
+        else:
+            self.register_buffer("logit_weights", logits)
+
+    @property
+    def weights(self) -> torch.Tensor:
+        """
+        Returns current mixing weights in [0, 1], shape (4,).
+        Order: (w_LL, w_LH, w_HL, w_HH)
+        """
+        return torch.sigmoid(self.logit_weights)
+
+    def forward(self, LL_ref, LL_est, coeffs_ref, coeffs_est):
+        """
+        Args:
+            LL_ref, LL_est: coarsest LL subbands (B, C, Hc, Wc)
+            coeffs_ref, coeffs_est: lists of (LH, HL, HH) from fine->coarse
+
+        Returns:
+            LL_new, coeffs_new: same structure as inputs, but mixed.
+        """
+        if LL_ref.shape != LL_est.shape:
+            raise ValueError(f"LL shapes must match, got {LL_ref.shape} vs {LL_est.shape}")
+
+        if len(coeffs_ref) != len(coeffs_est):
+            raise ValueError("Coefficient lists must have same length.")
+
+        w = self.weights.view(4, 1, 1, 1)  # (4, 1, 1, 1)
+        w_LL, w_LH, w_HL, w_HH = w[0], w[1], w[2], w[3]
+
+        # Mix LL (coarsest low frequency)
+        LL_new = w_LL * LL_ref + (1.0 - w_LL) * LL_est
+
+        # Mix detail bands at all levels with shared weights
+        coeffs_new = []
+        for (LH_r, HL_r, HH_r), (LH_e, HL_e, HH_e) in zip(coeffs_ref, coeffs_est):
+            LH_n = w_LH * LH_r + (1.0 - w_LH) * LH_e
+            HL_n = w_HL * HL_r + (1.0 - w_HL) * HL_e
+            HH_n = w_HH * HH_r + (1.0 - w_HH) * HH_e
+            coeffs_new.append((LH_n, HL_n, HH_n))
+
+        return LL_new, coeffs_new
