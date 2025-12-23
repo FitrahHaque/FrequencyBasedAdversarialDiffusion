@@ -4,7 +4,10 @@ import torch.nn.functional as F
 from torchvision.utils import save_image
 from utils import diff2clf, clf2diff, normalize
 import random
-from wavelet_utils import multi_level_dwt, multi_level_idwt
+
+from typing import Optional
+from frequency_masks import BaseFrequencyMask, RadialHardFrequencyMask, RadialSoftFrequencyMask
+from wavelet_utils import multi_level_dwt, multi_level_idwt, WaveletBandMixer
 
 def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
     betas = np.linspace(
@@ -15,33 +18,112 @@ def get_beta_schedule(beta_start, beta_end, num_diffusion_timesteps):
 
 
 class PurificationForward(torch.nn.Module):
-    def __init__(self, clf, diffusion, max_timestep, attack_steps, sampling_method, is_imagenet, device,amplitude_cut_range,phase_cut_range,delta,forward_noise_steps, transform_type='dft', wavelet_levels=2):
+    def __init__(
+        self,
+        clf,
+        diffusion,
+        max_timestep,
+        attack_steps,
+        sampling_method,
+        is_imagenet,
+        device,
+        amplitude_cut_range,
+        phase_cut_range,
+        delta,
+        forward_noise_steps,
+        amplitude_mask: Optional[BaseFrequencyMask] = None,
+        phase_mask: Optional[BaseFrequencyMask] = None,
+        learnable_delta: bool = False,
+        transform_type: str = 'dft',
+        wavelet_levels: int = 2,
+        wavelet_mixer: WaveletBandMixer | None = None,   # NEW
+    ):
         super().__init__()
         self.clf = clf
         self.diffusion = diffusion
         self.device = device
+
         self.betas = get_beta_schedule(1e-4, 2e-2, 1000).to(device)
         self.max_timestep = max_timestep
         self.attack_steps = attack_steps
+
         self.sampling_method = sampling_method
-        self.amplitude_cut_range = amplitude_cut_range
-        self.phase_cut_range = phase_cut_range
-        self.delta=delta
-        assert sampling_method in ['ddim', 'ddpm']
-        if self.sampling_method == 'ddim':
-            self.eta = 0
-        elif self.sampling_method == 'ddpm':
-            self.eta = 1
+        assert self.sampling_method in ["ddim", "ddpm"]
+        self.eta = 0 if self.sampling_method == "ddim" else 1
+
         self.is_imagenet = is_imagenet
         self.forward_noise_steps = forward_noise_steps
         self.transform_type = transform_type
         self.wavelet_levels = wavelet_levels
+
+        if amplitude_mask is None:
+            self.amplitude_mask: BaseFrequencyMask = RadialHardFrequencyMask(
+                cutoff=amplitude_cut_range,
+                device=device,
+                learnable=False,
+            )
+        else:
+            self.amplitude_mask = amplitude_mask
+
+        if phase_mask is None:
+            self.phase_mask: BaseFrequencyMask = RadialHardFrequencyMask(
+                cutoff=phase_cut_range,
+                device=device,
+                learnable=False,
+            )
+        else:
+            self.phase_mask = phase_mask
+
+        # Delta for phase projection (DFT & wavelet)
+        delta_tensor = torch.as_tensor(float(delta), dtype=torch.float32, device=device)
+        if learnable_delta:
+            self.delta = torch.nn.Parameter(delta_tensor)
+        else:
+            self.register_buffer("delta", delta_tensor)
+
+        # --- Wavelet mixer --------------------------------------
+        if self.transform_type == 'wavelet':
+            if wavelet_mixer is None:
+                # Default: fixed weights; learning is enabled via train script.
+                self.wavelet_mixer = WaveletBandMixer(learnable=False).to(device)
+            else:
+                self.wavelet_mixer = wavelet_mixer
+        else:
+            self.wavelet_mixer = None
 
     def compute_alpha(self, t):
         beta = torch.cat(
             [torch.zeros(1).to(self.betas.device), self.betas], dim=0)
         a = (1 - beta).cumprod(dim=0).index_select(0, t + 1).view(-1, 1, 1, 1)
         return a
+    
+    def wavelet_exchange(self, x_ref, x_est):
+        """
+        Wavelet-based frequency exchange (Combo C).
+
+        x_ref: Reference image (adversarial), (B, C, H, W) in [0, 1]
+        x_est: Estimated image from diffusion, (B, C, H, W) in [0, 1]
+        """
+        # Forward multi-level DWT
+        LL_ref, coeffs_ref, pads = multi_level_dwt(x_ref, levels=self.wavelet_levels)
+        LL_est, coeffs_est, _ = multi_level_dwt(x_est, levels=self.wavelet_levels)
+
+        # If we have a mixer (Combo C), use it; otherwise fall back to a simple baseline
+        if self.wavelet_mixer is not None:
+            LL_new, coeffs_new = self.wavelet_mixer(LL_ref, LL_est, coeffs_ref, coeffs_est)
+        else:
+            # Baseline: copy LL from ref, clamp details around ref within +/- delta
+            LL_new = LL_ref
+            coeffs_new = []
+            for (LH_r, HL_r, HH_r), (LH_e, HL_e, HH_e) in zip(coeffs_ref, coeffs_est):
+                LH_n = torch.clamp(LH_e, LH_r - self.delta, LH_r + self.delta)
+                HL_n = torch.clamp(HL_e, HL_r - self.delta, HL_r + self.delta)
+                HH_n = torch.clamp(HH_e, HH_r - self.delta, HH_r + self.delta)
+                coeffs_new.append((LH_n, HL_n, HH_n))
+
+        # Inverse DWT
+        x_new = multi_level_idwt(LL_new, coeffs_new, pads)
+        return torch.clamp(x_new, 0, 1)
 
     def get_noised_x(self, x, t):
         e = torch.randn_like(x)
@@ -125,36 +207,97 @@ class PurificationForward(torch.nn.Module):
 
         return amplitude_channels, phase_channels
 
-    def low_pass_exchange(self,amplitude_channels, amplitude_channels_0_t):
+    def _frequency_radius_grid(self, rows: int, cols: int, device: torch.device) -> torch.Tensor:
+        """
+        Build a (rows, cols) tensor where each entry is the distance to the
+        frequency origin in (u, v) space. Used by the masks.
+        """
+        u = torch.arange(-cols // 2, cols // 2, device=device)
+        v = torch.arange(-rows // 2, rows // 2, device=device)
+        # meshgrid returns (rows, cols) when indexing='ij'; default is fine here
+        V, U = torch.meshgrid(v, u, indexing="ij") if hasattr(torch.meshgrid, "__call__") else torch.meshgrid(v, u)
+        radius = torch.sqrt(U.float() ** 2 + V.float() ** 2)
+        return radius
+
+    def low_pass_exchange(self, amplitude_channels, amplitude_channels_0_t):
+        """
+        Amplitude Spectrum Exchange (ASE):
+
+        For each color channel, we interpolate between:
+            - amplitude from adversarial (amplitude_channels)
+            - amplitude from current estimate (amplitude_channels_0_t)
+
+        The interpolation weights come from self.amplitude_mask(radius).
+
+        If the mask is boolean (RadialHardFrequencyMask), this reproduces the
+        original behavior (hard swap inside low frequencies). If the mask is
+        soft (RadialSoftFrequencyMask), this becomes a smooth blend.
+        """
         filtered_amplitude_channels = []
         for i in range(3):
             rows, cols = amplitude_channels[i].shape
-            u = np.arange(-cols // 2, cols // 2)
-            v = np.arange(-rows // 2, rows // 2)
-            U, V = np.meshgrid(u, v)
-            frequency_map = np.sqrt(U ** 2 + V ** 2)
-            low_frequency = (frequency_map <= self.amplitude_cut_range)
-            low_frequency = torch.from_numpy(low_frequency).to(self.device)
-            amplitude_channels_0_t[i] = torch.where(low_frequency, amplitude_channels[i], amplitude_channels_0_t[i])
-            filtered_amplitude_channels.append(amplitude_channels_0_t[i])
+            radius = self._frequency_radius_grid(rows, cols, self.device)
+            mask = self.amplitude_mask(radius)
+
+            # Hard mask (original behavior)
+            if mask.dtype == torch.bool:
+                # same as torch.where(low_frequency, adv_amp, est_amp)
+                filtered = torch.where(
+                    mask,
+                    amplitude_channels[i],
+                    amplitude_channels_0_t[i],
+                )
+            else:
+                # Soft mask in [0, 1]: linear interpolation
+                mask = mask.to(amplitude_channels[i].dtype)
+                filtered = mask * amplitude_channels[i] + (1.0 - mask) * amplitude_channels_0_t[i]
+
+            filtered_amplitude_channels.append(filtered)
         return filtered_amplitude_channels
 
 
-    def phase_low_pass_exchange(self,phase_channels, phase_channels_0_t):
-        filtered_amplitude_channels = []
+    def phase_low_pass_exchange(self, phase_channels, phase_channels_0_t):
+        """
+        Phase Spectrum Projection (PSP) in low frequencies.
+
+        For each channel:
+          1) Combine low-frequency phase from adversarial & estimate
+             according to self.phase_mask.
+          2) Clip the resulting phase to be within +/- self.delta around the
+             adversarial phase (as in the original paper).
+        """
+        filtered_phase_channels = []
         for i in range(3):
             rows, cols = phase_channels[i].shape
-            u = np.arange(-cols // 2, cols // 2)
-            v = np.arange(-rows // 2, rows // 2)
-            U, V = np.meshgrid(u, v)
-            frequency_map = np.sqrt(U ** 2 + V ** 2)
-            low_frequency = (frequency_map <= self.phase_cut_range)
-            low_frequency = torch.from_numpy(low_frequency).to(self.device)
-            phase_channels_0_t[i] = torch.where(low_frequency, phase_channels[i], phase_channels_0_t[i])
-            phase_channels_0_t[i][low_frequency] = torch.clip(phase_channels_0_t[i][low_frequency],phase_channels[i][low_frequency]-self.delta,phase_channels[i][low_frequency]+self.delta)
-            filtered_amplitude_channels.append(phase_channels_0_t[i])
-        return filtered_amplitude_channels
-    
+            radius = self._frequency_radius_grid(rows, cols, self.device)
+            mask = self.phase_mask(radius)
+
+            adv_phase = phase_channels[i]
+            est_phase = phase_channels_0_t[i]
+
+            if mask.dtype == torch.bool:
+                # Original behavior: hard replace low-frequency phase
+                blended = torch.where(mask, adv_phase, est_phase)
+
+                # Clip ONLY where we took from adversarial low frequencies
+                lower = adv_phase - self.delta
+                upper = adv_phase + self.delta
+                clipped = blended.clone()
+                clipped[mask] = torch.clamp(
+                    blended[mask],
+                    min=lower[mask],
+                    max=upper[mask],
+                )
+            else:
+                # Soft blend everywhere
+                mask = mask.to(adv_phase.dtype)
+                blended = mask * adv_phase + (1.0 - mask) * est_phase
+                lower = adv_phase - self.delta
+                upper = adv_phase + self.delta
+                clipped = torch.clamp(blended, min=lower, max=upper)
+
+            filtered_phase_channels.append(clipped)
+        return filtered_phase_channels
 
     
     def phase_exchange(self,phase_channels,phase_channels_0_t):
@@ -186,38 +329,7 @@ class PurificationForward(torch.nn.Module):
             reconstructed_image.append(img_reconstructed/255)
         return torch.stack(reconstructed_image,dim=2)
 
-    def wavelet_exchange(self, x_ref, x_est):
-        """
-        Wavelet-based frequency exchange.
-        x_ref: Reference image (adversarial), shape (B, C, H, W), range [0, 1]
-        x_est: Estimated image (from diffusion), shape (B, C, H, W), range [0, 1]
-        """
-        # Forward DWT on both images
-        LL_ref, coeffs_ref, pads = multi_level_dwt(x_ref, levels=self.wavelet_levels)
-        LL_est, coeffs_est, _ = multi_level_dwt(x_est, levels=self.wavelet_levels)
         
-        # LL Exchange: Replace estimate's LL with reference's LL (structure preservation)
-        # This is analogous to ASE - keeping the adversarial's low-frequency structure
-        LL_new = LL_ref
-        
-        # Detail Projection: Clip estimate's details to be within delta of reference
-        # This is analogous to PSP - soft constraint on high-frequency details
-        coeffs_new = []
-        for i in range(len(coeffs_ref)):
-            LH_r, HL_r, HH_r = coeffs_ref[i]
-            LH_e, HL_e, HH_e = coeffs_est[i]
-            
-            # Project estimate details to be within delta of reference
-            LH_n = torch.clamp(LH_e, LH_r - self.delta, LH_r + self.delta)
-            HL_n = torch.clamp(HL_e, HL_r - self.delta, HL_r + self.delta)
-            HH_n = torch.clamp(HH_e, HH_r - self.delta, HH_r + self.delta)
-            
-            coeffs_new.append((LH_n, HL_n, HH_n))
-        
-        # Inverse DWT to reconstruct
-        x_new = multi_level_idwt(LL_new, coeffs_new, pads)
-        return torch.clamp(x_new, 0, 1)
-
     
     def amplitude_phase_exchange_torch(self,x,x_0_t):
         x_t = self.get_noised_x(x, self.forward_noise_steps)
@@ -227,6 +339,7 @@ class PurificationForward(torch.nn.Module):
         x =  (x_t - et * (1 - at).sqrt()) / at.sqrt()
         # save_image(diff2clf(x), 'new_x_0_t.png')
         
+                
         # Wavelet-based exchange
         if self.transform_type == 'wavelet':
             x_ref = torch.clamp(diff2clf(x), 0, 1)
